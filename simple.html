@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <script src="webgazer.js"></script>
+</head>
+<body style="font-family:Tahoma;direction:rtl;font-size:24px;text-align:center;padding:50px;">
+    <h1>تست WebGazer</h1>
+    <p id="s">در حال بارگذاری...</p>
+    <button onclick="start()" style="font-size:24px;padding:20px;">شروع</button>
+    <p id="r" style="font-size:32px;color:red;"></p>
+    <script>
+        window.onload = function() {
+            if (typeof webgazer !== 'undefined') {
+                document.getElementById("s").innerHTML = "✅ WebGazer بارگذاری شد";
+            } else {
+                document.getElementById("s").innerHTML = "❌ WebGazer بارگذاری نشد";
+            }
+        };
+        function start() {
+            webgazer.setGazeListener(function(data, elapsedTime) {
+                if (data == null) {
+                    document.getElementById("r").innerHTML = "❌ داده null است (چشم تشخیص داده نمی‌شود)";
+                    return;
+                }
+                document.getElementById("r").innerHTML = 
+                    "✅ X=" + data.x.toFixed(0) + " Y=" + data.y.toFixed(0);
+            }).begin();
+        }
+    </script>
+</body>
+</html>

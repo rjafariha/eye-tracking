@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>پژوهش معماری منظر</title>
+    <meta charset="UTF-8">
+    <script src="webgazer.js"></script>
+    <style>
+        body { margin: 0; font-family: Tahoma; direction: rtl; background: #fff; }
+        #start { width: 100vw; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        #exp { display: none; width: 100vw; height: 100vh; justify-content: center; align-items: center; background: #000; }
+        #img { max-width: 100vw; max-height: 100vh; object-fit: contain; }
+        #fix { display: none; position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); color: white; font-size: 60px; }
+        .cp { position: absolute; width: 30px; height: 30px; background: red; border-radius: 50%; cursor: pointer; z-index: 9999; }
+        button { padding: 15px 30px; font-size: 20px; background: #007bff; color: white; border: none; border-radius: 8px; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div id="start">
+    <h1>🧠 پژوهش معماری منظر</h1>
+    <p>لطفاً در فاصله‌ی ۵۰-۷۰ سانتی‌متری بنشینید.</p>
+    <button id="btn">شروع آزمایش</button>
+</div>
+
+<div id="exp">
+    <div id="fix">+</div>
+    <img id="img" src="">
+</div>
+
+<script>
+// ============ تنظیمات ============
+var IMAGES = [
+    "images/morning1.jpg",
+    "images/morning2.jpg",
+    "images/morning3.jpg",
+    "images/evening1.jpg",
+    "images/evening2.jpg",
+    "images/evening3.jpg"
+];
+var DISPLAY_TIME = 8000;
+
+var currentTrial = -1;
+var recording = false;
+var trialStartTime = null;
+var gazeData = [];
+var scanPath = [];
+var fixations = [];
+var fixStart = null;
+var fixArea = null;
+var lastX = null;
+var lastY = null;
+var calibrated = false;
+
+var AOIS = [
+    { sky: {x:0,y:0,w:55,h:38}, plant: {x:0,y:0,w:100,h:100}, building: {x:25,y:15,w:55,h:50}, paving: {x:50,y:55,w:50,h:45}, furniture: {x:48,y:45,w:30,h:45} },
+    { sky: {x:55,y:0,w:45,h:30}, plant: {x:0,y:0,w:100,h:100}, building: {x:25,y:10,w:60,h:65}, paving: {x:0,y:70,w:100,h:30}, furniture: {x:15,y:55,w:65,h:40} },
+    { sky: {x:0,y:0,w:100,h:25}, plant: {x:0,y:0,w:100,h:100}, building: {x:20,y:10,w:60,h:60}, paving: {x:0,y:65,w:100,h:35}, furniture: {x:18,y:50,w:60,h:40} },
+    { sky: {x:55,y:0,w:45,h:35}, plant: {x:0,y:0,w:100,h:100}, building: {x:20,y:10,w:60,h:60}, paving: {x:0,y:65,w:100,h:35}, furniture: {x:15,y:50,w:55,h:40} },
+    { sky: {x:0,y:0,w:100,h:30}, plant: {x:0,y:0,w:100,h:100}, building: {x:20,y:15,w:60,h:60}, paving: {x:0,y:70,w:100,h:30}, furniture: {x:50,y:45,w:20,h:40} },
+    { sky: {x:0,y:0,w:100,h:30}, plant: {x:0,y:0,w:100,h:100}, building: {x:20,y:15,w:60,h:60}, paving: {x:0,y:70,w:100,h:30}, furniture: {x:25,y:50,w:50,h:40} }
+];
+
+var PRIORITY = ["building", "furniture", "paving", "sky", "plant"];
+var NAMES = { sky:"آسمان", plant:"پوشش گیاهی", building:"بنای تاریخی", paving:"کف‌سازی", furniture:"مبلمان شهری" };
+
+// ============ شروع ============
+document.getElementById("btn").onclick = function() {
+    document.getElementById("start").style.display = "none";
+    startWebGazer();
+};
+
+function startWebGazer() {
+    webgazer.setGazeListener(function(data, elapsedTime) {
+        if (data == null || !recording) return;
+        recordGaze(data.x, data.y);
+    }).begin();
+    
+    webgazer.showVideoPreview(true);
+    webgazer.showPredictionPoints(true);
+    
+    setTimeout(function() {
+        startCalibration();
+    }, 2000);
+}
+
+// ============ کالیبراسیون ============
+function startCalibration() {
+    var positions = [[10,10],[50,10],[90,10],[10,50],[50,50],[90,50],[10,90],[50,90],[90,90]];
+    var i = 0;
+    
+    function nextPoint() {
+        if (i >= positions.length) {
+            calibrationDone();
+            return;
+        }
+        var pos = positions[i];
+        var p = document.createElement("div");
+        p.className = "cp";
+        p.style.left = "calc(" + pos[0] + "% - 15px)";
+        p.style.top = "calc(" + pos[1] + "% - 15px)";
+        document.body.appendChild(p);
+        
+        var clicks = 0;
+        p.onclick = function() {
+            clicks++;
+            p.style.transform = "scale(" + (1 + clicks * 0.2) + ")";
+            if (clicks >= 3) {
+                p.remove();
+                i++;
+                nextPoint();
+            }
+        };
+    }
+    nextPoint();
+}
+
+function calibrationDone() {
+    calibrated = true;
+    webgazer.showVideoPreview(false);
+    webgazer.showPredictionPoints(false);
+    document.getElementById("exp").style.display = "flex";
+    nextTrial();
+}
+
+// ============ نمایش عکس ============
+function nextTrial() {
+    currentTrial++;
+    if (currentTrial >= IMAGES.length) {
+        finish();
+        return;
+    }
+    recording = false;
+    fixStart = null;
+    lastX = null;
+    lastY = null;
+    
+    var img = document.getElementById("img");
+    var fix = document.getElementById("fix");
+    img.style.display = "none";
+    fix.style.display = "block";
+    
+    setTimeout(function() {
+        fix.style.display = "none";
+        img.src = IMAGES[currentTrial];
+        img.onload = function() {
+            img.style.display = "block";
+            trialStartTime = performance.now();
+            recording = true;
+            setTimeout(function() {
+                recording = false;
+                if (fixStart !== null) endFix(performance.now());
+                img.style.display = "none";
+                nextTrial();
+            }, DISPLAY_TIME);
+        };
+    }, 1000);
+}
+
+// ============ تشخیص حوزه ============
+function getAOI(gx, gy) {
+    var img = document.getElementById("img");
+    var rect = img.getBoundingClientRect();
+    var rx = gx - rect.left;
+    var ry = gy - rect.top;
+    
+    if (rx < 0 || rx > rect.width || ry < 0 || ry > rect.height) return "outside";
+    
+    var px = (rx / rect.width) * 100;
+    var py = (ry / rect.height) * 100;
+    
+    var aois = AOIS[currentTrial];
+    for (var k = 0; k < PRIORITY.length; k++) {
+        var key = PRIORITY[k];
+        var a = aois[key];
+        if (a && px >= a.x && px <= a.x + a.w && py >= a.y && py <= a.y + a.h) return key;
+    }
+    return "other";
+}
+
+// ============ پایان تثبیت ============
+function endFix(now) {
+    if (fixStart === null) return;
+    var dur = now - fixStart;
+    if (dur >= 100) {
+        fixations.push({
+            trial: currentTrial,
+            image: IMAGES[currentTrial],
+            aoi: fixArea,
+            name: NAMES[fixArea] || fixArea,
+            duration: dur
+        });
+    }
+    fixStart = null;
+    fixArea = null;
+}
+
+// ============ ثبت نگاه ============
+function recordGaze(gx, gy) {
+    var img = document.getElementById("img");
+    var rect = img.getBoundingClientRect();
+    var rx = gx - rect.left;
+    var ry = gy - rect.top;
+    var inside = rx >= 0 && rx <= rect.width && ry >= 0 && ry <= rect.height;
+    
+    var aoi = getAOI(gx, gy);
+    var t = performance.now() - trialStartTime;
+    
+    gazeData.push({
+        trial: currentTrial,
+        image: IMAGES[currentTrial],
+        time: t,
+        x: gx, y: gy,
+        rx: rx, ry: ry,
+        inside: inside,
+        aoi: aoi
+    });
+    
+    if (lastX !== null) {
+        var move = Math.abs(gx - lastX) + Math.abs(gy - lastY);
+        if (move < 30) {
+            if (fixStart === null) {
+                fixStart = performance.now();
+                fixArea = aoi;
+            } else if (aoi !== fixArea) {
+                endFix(performance.now());
+                fixStart = performance.now();
+                fixArea = aoi;
+            }
+        } else {
+            if (fixStart !== null) endFix(performance.now());
+        }
+    }
+    
+    if (aoi !== "outside" && aoi !== "other") {
+        var last = scanPath[scanPath.length - 1];
+        if (!last || last.trial !== currentTrial || last.aoi !== aoi) {
+            scanPath.push({
+                trial: currentTrial,
+                image: IMAGES[currentTrial],
+                order: scanPath.filter(function(s){return s.trial === currentTrial;}).length + 1,
+                aoi: aoi,
+                name: NAMES[aoi] || aoi,
+                time: t
+            });
+        }
+    }
+    
+    lastX = gx;
+    lastY = gy;
+}
+
+// ============ پایان ============
+function finish() {
+    recording = false;
+    webgazer.end();
+    document.getElementById("exp").style.display = "none";
+    
+    var csv = "trial,image,time,x,y,rx,ry,inside,aoi\n";
+    gazeData.forEach(function(r) {
+        csv += r.trial + "," + r.image + "," + r.time.toFixed(0) + "," + r.x.toFixed(1) + "," + r.y.toFixed(1) + "," + r.rx.toFixed(1) + "," + r.ry.toFixed(1) + "," + r.inside + "," + r.aoi + "\n";
+    });
+    
+    csv += "\n=== Scan Path ===\n";
+    csv += "trial,image,order,aoi,name,time\n";
+    scanPath.forEach(function(s) {
+        csv += s.trial + "," + s.image + "," + s.order + "," + s.aoi + "," + s.name + "," + s.time.toFixed(0) + "\n";
+    });
+    
+    csv += "\n=== Fixations ===\n";
+    csv += "trial,image,aoi,name,duration_ms\n";
+    fixations.forEach(function(f) {
+        csv += f.trial + "," + f.image + "," + f.aoi + "," + f.name + "," + f.duration.toFixed(0) + "\n";
+    });
+    
+    var blob = new Blob(["\uFEFF" + csv], {type: "text/csv;charset=utf-8;"});
+    var link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "gaze_data.csv";
+    link.click();
+    
+    alert("✅ داده‌ها دانلود شدند!");
+}
+</script>
+</body>
+</html>

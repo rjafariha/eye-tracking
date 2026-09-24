@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>تست WebGazer</title>
+    <script src="webgazer.js"></script>
+</head>
+<body>
+    <h1>تست WebGazer</h1>
+    <p id="status">در حال بارگذاری...</p>
+    <button onclick="startTest()">شروع تست</button>
+    <div id="result" style="font-size:20px; margin-top:20px;"></div>
+
+    <script>
+        window.onload = function() {
+            if (typeof webgazer !== 'undefined') {
+                document.getElementById("status").innerHTML = 
+                    "✅ WebGazer بارگذاری شد!";
+            } else {
+                document.getElementById("status").innerHTML = 
+                    "❌ WebGazer بارگذاری نشد!";
+            }
+        };
+
+        function startTest() {
+            webgazer.setGazeListener(function(data, elapsedTime) {
+                if (data == null) return;
+                document.getElementById("result").innerHTML = 
+                    "موقعیت نگاه: X=" + data.x.toFixed(0) + " Y=" + data.y.toFixed(0);
+            }).begin();
+            
+            for (let i = 1; i <= 9; i++) {
+                let point = document.createElement("div");
+                point.style.position = "absolute";
+                point.style.width = "30px";
+                point.style.height = "30px";
+                point.style.background = "red";
+                point.style.borderRadius = "50%";
+                point.style.left = (i % 3) * 30 + 10 + "%";
+                point.style.top = Math.floor((i - 1) / 3) * 30 + 10 + "%";
+                document.body.appendChild(point);
+            }
+        }
+    </script>
+</body>
+</html>
